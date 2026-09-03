@@ -1,5 +1,5 @@
 import { useEffect, useState, memo, useCallback } from "react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Undo2 } from "lucide-react";
 import { useProducts, useProductActions } from "../context/AppContext";
 import PageHeader from "../components/PageHeader";
 import api from "../api/axios";
@@ -51,27 +51,65 @@ const ColdDrinks = () => {
   const { fetchProducts, sellProduct } = useProductActions();
   const [resetting, setResetting] = useState(false);
 
+  // Recent sales log — kept separate from the Products context since it's
+  // its own list with its own loading state, only used on this page.
+  const [recentSales, setRecentSales] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [undoingId, setUndoingId] = useState(null);
+
   useEffect(() => {
     fetchProducts("cold_drink");
   }, [fetchProducts]);
 
+  const loadRecentSales = useCallback(async () => {
+    setSalesLoading(true);
+    try {
+      const res = await api.get("/products/sales/recent");
+      setRecentSales(res.data);
+    } catch (err) {
+      console.error("Couldn't load recent sales", err);
+    } finally {
+      setSalesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentSales();
+  }, [loadRecentSales]);
+
   const handleSell = useCallback(
     (productId) => {
-      sellProduct(productId, 1).catch(() => {
-        console.error("Sale failed — will be out of sync until next refresh");
-      });
+      sellProduct(productId, 1)
+        .then(() => loadRecentSales()) // refresh the log so the new tap shows up immediately
+        .catch(() => {
+          console.error("Sale failed — will be out of sync until next refresh");
+        });
     },
-    [sellProduct]
+    [sellProduct, loadRecentSales]
   );
 
-  // Wipes today's counters on the server, then re-fetches so the grid
-  // reflects the clean slate immediately.
+  // Fully reverses a mis-tap or an exchanged bottle: removes it from both
+  // the product's running counter and the sales log, then re-fetches both
+  // so the grid's count badge and this list stay in sync.
+  const handleUndo = async (saleId) => {
+    if (!confirm("Undo this sale?")) return;
+    setUndoingId(saleId);
+    try {
+      await api.delete(`/products/sales/${saleId}`);
+      await Promise.all([fetchProducts("cold_drink"), loadRecentSales()]);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUndoingId(null);
+    }
+  };
+
   const handleResetDay = async () => {
     if (!confirm("Reset today's cold drink sales to zero? This can't be undone.")) return;
     setResetting(true);
     try {
       await api.post("/products/reset-daily");
-      await fetchProducts("cold_drink");
+      await Promise.all([fetchProducts("cold_drink"), loadRecentSales()]);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -81,8 +119,6 @@ const ColdDrinks = () => {
 
   const todayTotal = products.reduce((sum, p) => sum + (p.dailyRevenue || 0), 0);
   const todayUnits = products.reduce((sum, p) => sum + (p.dailyCount || 0), 0);
-  // Estimated profit — rough figure per the owner's placeholder profit
-  // values, to be refined once exact per-product profit is confirmed.
   const todayProfit = products.reduce((sum, p) => sum + (p.dailyCount || 0) * (p.profit || 0), 0);
 
   return (
@@ -121,15 +157,55 @@ const ColdDrinks = () => {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-32 rounded-2xl bg-ink-100 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             {products.map((product) => (
               <DrinkTile key={product._id} product={product} onSell={handleSell} />
+            ))}
+          </div>
+        )}
+
+        {/* Undo a mis-tap or a bottle the customer wants to exchange — tap
+            the trash-with-arrow icon on the exact sale that needs reversing. */}
+        <h2 className="font-semibold text-ink-900 text-sm mb-2">Recent Sales</h2>
+        {salesLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-xl bg-ink-100 animate-pulse" />
+            ))}
+          </div>
+        ) : recentSales.length === 0 ? (
+          <p className="text-sm text-ink-400 text-center mt-4">No sales yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {recentSales.map((sale) => (
+              <div key={sale._id} className="flex items-center justify-between bg-white rounded-xl p-3 shadow-tile">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink-900">
+                    {sale.product?.name} {sale.product?.variant}
+                    {sale.quantity > 1 ? ` × ${sale.quantity}` : ""}
+                  </p>
+                  <p className="text-xs text-ink-400">
+                    {new Date(sale.transactionDate).toLocaleTimeString("en-PK", { timeStyle: "short" })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <span className="font-semibold text-sm text-ink-900">{currency(sale.amount)}</span>
+                  <button
+                    onClick={() => handleUndo(sale._id)}
+                    disabled={undoingId === sale._id}
+                    className="text-debt p-1 disabled:opacity-40"
+                    aria-label="Undo sale"
+                  >
+                    <Undo2 size={16} />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
