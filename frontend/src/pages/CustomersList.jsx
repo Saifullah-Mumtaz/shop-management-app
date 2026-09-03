@@ -15,10 +15,8 @@ const CustomersList = ({ accountType }) => {
   const { fetchCustomers, createCustomer } = useCustomerActions();
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", notes: "", amount: "", note: "" });
+  const [form, setForm] = useState({ name: "", phone: "", notes: "" });
   const [saving, setSaving] = useState(false);
-
-  const isLoan = accountType === "loan";
 
   useEffect(() => {
     fetchCustomers(accountType);
@@ -34,7 +32,7 @@ const CustomersList = ({ accountType }) => {
     setSaving(true);
     try {
       await createCustomer({ ...form, accountType });
-      setForm({ name: "", phone: "", notes: "", amount: "", note: "" });
+      setForm({ name: "", phone: "", notes: "" });
       setSheetOpen(false);
     } catch (err) {
       alert(err.message);
@@ -105,53 +103,30 @@ const CustomersList = ({ accountType }) => {
           <input
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Name"
+            placeholder="Customer name"
             required
             autoFocus
             className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
           />
-
-          {isLoan ? (
-            <>
-              <input
-                type="number"
-                min="0"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                placeholder="Amount"
-                className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-              />
-              <input
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                placeholder="Note (optional)"
-                className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-              />
-            </>
-          ) : (
-            <>
-              <input
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="Phone (optional)"
-                className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-              />
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Notes (optional)"
-                rows={2}
-                className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
-              />
-            </>
-          )}
-
+          <input
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="Phone (optional)"
+            className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          />
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Notes (optional)"
+            rows={2}
+            className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm outline-none focus:border-brand-400"
+          />
           <button
             type="submit"
             disabled={saving}
             className="w-full bg-brand-500 text-white rounded-xl py-3 font-semibold disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : "Save customer"}
           </button>
         </form>
       </BottomSheet>

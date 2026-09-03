@@ -14,10 +14,10 @@ await connectDB();
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || "*" }));
+app.use(cors({ origin: process.env.CLIENT_ORIGIN||"*"}));
 app.use(express.json());
 
-app.get("/api/health", (req, res) => res.json({ success: true, status: "ok" }));
+app.get("/api/health",(req,res)=>res.json({success:true,status:"ok"}));
 
 app.use("/api/customers", customerRoutes);
 app.use("/api/transactions", transactionRoutes);
