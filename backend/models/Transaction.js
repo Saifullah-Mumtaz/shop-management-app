@@ -2,34 +2,33 @@ import mongoose from "mongoose";
 
 /**
  * Every money movement in the shop is one Transaction: a loan given, a loan
- * repaid, an advance taken, an advance used, or a cold-drink sale. Keeping
- * one collection (instead of separate LoanEntry / SaleEntry collections)
- * means the nightly report and the customer history view are both a single
- * indexed query away.
+ * repaid, an advance taken, an advance used, an installment item given, an
+ * installment payment received, or a cold-drink sale. Loan and Installment
+ * each get their OWN pair of type strings (never shared) so they can never
+ * accidentally mix in a report or aggregation that filters by type.
  */
 const transactionSchema = new mongoose.Schema(
   {
     type: {
       type: String,
       enum: [
-        "loan_given", // shop extends credit to customer (+balance)
-        "loan_repaid", // customer pays back (-balance)
-        "advance_deposit", // customer prepays shop (+balance on advance acct)
-        "advance_used", // customer draws down prepaid credit (-balance)
-        "cold_drink_sale", // POS sale, not tied to a customer account
+        "loan_given",
+        "loan_repaid",
+        "advance_deposit",
+        "advance_used",
+        "installment_given",
+        "installment_repaid",
+        "cold_drink_sale",
       ],
       required: true,
       index: true,
     },
-    // Present for loan_* / advance_* transactions, absent for anonymous
-    // cold-drink sales rung up at the counter.
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
       default: null,
       index: true,
     },
-    // Present for cold_drink_sale transactions.
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
@@ -46,8 +45,6 @@ const transactionSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    // Denormalized so the daily report doesn't need a $lookup just to
-    // group by calendar day in the shop's local timezone.
     transactionDate: {
       type: Date,
       default: Date.now,
@@ -61,8 +58,6 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// The dashboard/report queries are always "give me everything of type X
-// within date range Y" — this compound index covers that access pattern.
 transactionSchema.index({ type: 1, transactionDate: -1 });
 
 export default mongoose.model("Transaction", transactionSchema);

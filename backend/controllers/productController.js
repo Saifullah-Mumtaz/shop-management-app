@@ -60,49 +60,68 @@ export const sellProduct = asyncHandler(async (req, res) => {
   }
 });
 
-export const resetDailyStats = asyncHandler(async (req, res) => {
-  await Product.updateMany(
-    { category: "cold_drink" },
-    { $set: { dailyCount: 0, dailyRevenue: 0 } }
-  );
-  res.json({ success: true, message: "Today's cold drink counters reset" });
-});
-
-
-export const getRecentSales = asyncHandler(async (req, res) => {
-  const limit = Number(req.query.limit) || 15;
-  const sales = await Transaction.find({ type: "cold_drink_sale" })
-    .sort({ transactionDate: -1 })
-    .limit(limit)
-    .populate("product", "name variant imageUrl")
-    .lean();
-  res.json({ success: true, data: sales });
-});
-
-
-export const undoSale = asyncHandler(async (req, res) => {
+// @desc  The "minus" button — removes ONE unit from a product's running
+//        count/revenue. It reverses the most recent still-existing sale
+//        for that product (so the exchanged-bottle scenario, or a mis-tap,
+//        is corrected by removing the last thing that happened, not an
+//        arbitrary one). If there's no sale left to reverse, it does
+//        nothing (can't go below zero).
+// @route POST /api/products/:id/subtract
+export const subtractProduct = asyncHandler(async (req, res) => {
+  const quantity = Number(req.body.quantity) || 1;
   const session = await mongoose.startSession();
   try {
+    let result;
     await session.withTransaction(async () => {
-      const sale = await Transaction.findOne({
-        _id: req.params.id,
-        type: "cold_drink_sale",
-      }).session(session);
-      if (!sale) {
+      const product = await Product.findById(req.params.id).session(session);
+      if (!product) {
         res.status(404);
-        throw new Error("Sale not found");
+        throw new Error("Product not found");
       }
 
-      await Product.findByIdAndUpdate(
-        sale.product,
-        { $inc: { dailyCount: -sale.quantity, dailyRevenue: -sale.amount } },
-        { session }
-      );
+      // Find the most recent sale of this exact product to reverse.
+      const lastSale = await Transaction.findOne({
+        type: "cold_drink_sale",
+        product: product._id,
+      })
+        .sort({ transactionDate: -1 })
+        .session(session);
 
-      await sale.deleteOne({ session });
+      if (lastSale && product.dailyCount > 0) {
+        const revertQty = Math.min(quantity, lastSale.quantity);
+        const revertAmount = product.price * revertQty;
+
+        product.dailyCount = Math.max(0, product.dailyCount - revertQty);
+        product.dailyRevenue = Math.max(0, product.dailyRevenue - revertAmount);
+        await product.save({ session });
+
+        if (lastSale.quantity <= revertQty) {
+          await lastSale.deleteOne({ session });
+        } else {
+          lastSale.quantity -= revertQty;
+          lastSale.amount -= revertAmount;
+          await lastSale.save({ session });
+        }
+      }
+
+      result = product;
     });
-    res.json({ success: true, message: "Sale undone" });
+    res.json({
+      success: true,
+      data: { id: result._id, dailyCount: result.dailyCount, dailyRevenue: result.dailyRevenue },
+    });
   } finally {
     session.endSession();
   }
+});
+
+export const resetDailyStats = asyncHandler(async (req, res) => {
+  await Promise.all([
+    Product.updateMany(
+      { category: "cold_drink" },
+      { $set: { dailyCount: 0, dailyRevenue: 0 } }
+    ),
+    Transaction.deleteMany({ type: "cold_drink_sale" }),
+  ]);
+  res.json({ success: true, message: "Today's cold drink counters reset" });
 });

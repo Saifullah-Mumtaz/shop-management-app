@@ -4,9 +4,8 @@ import {
   createProduct,
   updateProduct,
   sellProduct,
+  subtractProduct,
   resetDailyStats,
-  getRecentSales,
-  undoSale,
 } from "../controllers/productController.js";
 
 const router = express.Router();
@@ -14,8 +13,7 @@ const router = express.Router();
 router.route("/").get(getProducts).post(createProduct);
 router.put("/:id", updateProduct);
 router.post("/:id/sell", sellProduct);
+router.post("/:id/subtract", subtractProduct);
 router.post("/reset-daily", resetDailyStats);
-router.get("/sales/recent", getRecentSales);
-router.delete("/sales/:id", undoSale);
 
 export default router;

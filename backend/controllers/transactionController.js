@@ -8,6 +8,8 @@ const BALANCE_DELTA = {
   loan_repaid: (amount) => -amount,
   advance_deposit: (amount) => amount,
   advance_used: (amount) => -amount,
+  installment_given: (amount) => amount,
+  installment_repaid: (amount) => -amount,
 };
 
 export const createTransaction = asyncHandler(async (req, res) => {
@@ -16,7 +18,7 @@ export const createTransaction = asyncHandler(async (req, res) => {
   if (!BALANCE_DELTA[type]) {
     res.status(400);
     throw new Error(
-      "type must be one of loan_given, loan_repaid, advance_deposit, advance_used"
+      "type must be one of loan_given, loan_repaid, advance_deposit, advance_used, installment_given, installment_repaid"
     );
   }
   if (!amount || amount <= 0) {
@@ -44,12 +46,6 @@ export const createTransaction = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc  Edit an existing entry's amount (and/or note). Adjusts the
-//        customer's balance by only the DIFFERENCE between the old and new
-//        amount — so changing a 1000 loan entry down to 600 subtracts
-//        exactly 400 from the total, nothing more.
-// @route PUT /api/transactions/:id
-// @body  { amount, note }
 export const updateTransaction = asyncHandler(async (req, res) => {
   const { amount, note } = req.body;
   if (amount === undefined || amount <= 0) {

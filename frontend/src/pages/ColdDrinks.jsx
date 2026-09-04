@@ -1,5 +1,5 @@
 import { useEffect, useState, memo, useCallback } from "react";
-import { RotateCcw, Undo2 } from "lucide-react";
+import { RotateCcw, Plus, Minus } from "lucide-react";
 import { useProducts, useProductActions } from "../context/AppContext";
 import PageHeader from "../components/PageHeader";
 import api from "../api/axios";
@@ -9,39 +9,79 @@ const currency = (n) =>
     n || 0
   );
 
-const DrinkTile = memo(({ product, onSell }) => {
+// Tapping the image/name area still logs a quick sale (fast path for the
+// common case). The small +/- row underneath is for corrections: bump the
+// count up or down by one without leaving the grid or hunting through a
+// separate sales list.
+const DrinkTile = memo(({ product, onAdd, onSubtract }) => {
   const [pulsing, setPulsing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const handleTap = useCallback(() => {
+  const handleQuickAdd = useCallback(() => {
     setPulsing(true);
-    onSell(product._id);
+    onAdd(product._id);
     setTimeout(() => setPulsing(false), 180);
-  }, [onSell, product._id]);
+  }, [onAdd, product._id]);
+
+  const handlePlus = async (e) => {
+    e.stopPropagation();
+    setBusy(true);
+    await onAdd(product._id);
+    setBusy(false);
+  };
+
+  const handleMinus = async (e) => {
+    e.stopPropagation();
+    if (product.dailyCount <= 0) return;
+    setBusy(true);
+    await onSubtract(product._id);
+    setBusy(false);
+  };
 
   return (
-    <button
-      onClick={handleTap}
+    <div
       className={`relative flex flex-col items-center rounded-2xl bg-white p-3 shadow-tile
-        active:scale-95 transition-transform duration-150 touch-manipulation
-        ${pulsing ? "ring-2 ring-chill-400" : ""}`}
+        transition-transform duration-150 ${pulsing ? "ring-2 ring-chill-400" : ""}`}
     >
       {product.dailyCount > 0 && (
         <span className="absolute -top-2 -right-2 bg-chill-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow">
           {product.dailyCount}
         </span>
       )}
-      <img
-        src={product.imageUrl}
-        alt={`${product.name} ${product.variant}`}
-        loading="lazy"
-        className="h-20 w-20 object-contain mb-2"
-      />
-      <span className="font-body text-sm font-semibold text-ink-900 text-center leading-tight">
-        {product.name}
-      </span>
-      <span className="text-xs text-ink-400 mb-1">{product.variant}</span>
-      <span className="font-display text-sm font-bold text-brand-600">{currency(product.price)}</span>
-    </button>
+      <button onClick={handleQuickAdd} className="flex flex-col items-center active:scale-95 transition-transform">
+        <img
+          src={product.imageUrl}
+          alt={`${product.name} ${product.variant}`}
+          loading="lazy"
+          className="h-20 w-20 object-contain mb-2"
+        />
+        <span className="font-body text-sm font-semibold text-ink-900 text-center leading-tight">
+          {product.name}
+        </span>
+        <span className="text-xs text-ink-400 mb-1">{product.variant}</span>
+        <span className="font-display text-sm font-bold text-brand-600">{currency(product.price)}</span>
+      </button>
+
+      {/* Small +/- row for corrections */}
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          onClick={handleMinus}
+          disabled={busy || product.dailyCount <= 0}
+          className="h-7 w-7 rounded-full bg-red-50 text-debt flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform"
+          aria-label="Subtract one"
+        >
+          <Minus size={14} strokeWidth={3} />
+        </button>
+        <button
+          onClick={handlePlus}
+          disabled={busy}
+          className="h-7 w-7 rounded-full bg-chill-100 text-chill-500 flex items-center justify-center disabled:opacity-30 active:scale-90 transition-transform"
+          aria-label="Add one"
+        >
+          <Plus size={14} strokeWidth={3} />
+        </button>
+      </div>
+    </div>
   );
 });
 DrinkTile.displayName = "DrinkTile";
@@ -51,65 +91,42 @@ const ColdDrinks = () => {
   const { fetchProducts, sellProduct } = useProductActions();
   const [resetting, setResetting] = useState(false);
 
-  // Recent sales log — kept separate from the Products context since it's
-  // its own list with its own loading state, only used on this page.
-  const [recentSales, setRecentSales] = useState([]);
-  const [salesLoading, setSalesLoading] = useState(true);
-  const [undoingId, setUndoingId] = useState(null);
-
   useEffect(() => {
     fetchProducts("cold_drink");
   }, [fetchProducts]);
 
-  const loadRecentSales = useCallback(async () => {
-    setSalesLoading(true);
-    try {
-      const res = await api.get("/products/sales/recent");
-      setRecentSales(res.data);
-    } catch (err) {
-      console.error("Couldn't load recent sales", err);
-    } finally {
-      setSalesLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadRecentSales();
-  }, [loadRecentSales]);
-
-  const handleSell = useCallback(
-    (productId) => {
-      sellProduct(productId, 1)
-        .then(() => loadRecentSales()) // refresh the log so the new tap shows up immediately
-        .catch(() => {
-          console.error("Sale failed — will be out of sync until next refresh");
-        });
+  const handleAdd = useCallback(
+    async (productId) => {
+      try {
+        await sellProduct(productId, 1);
+      } catch (err) {
+        console.error("Add failed", err);
+      }
     },
-    [sellProduct, loadRecentSales]
+    [sellProduct]
   );
 
-  // Fully reverses a mis-tap or an exchanged bottle: removes it from both
-  // the product's running counter and the sales log, then re-fetches both
-  // so the grid's count badge and this list stay in sync.
-  const handleUndo = async (saleId) => {
-    if (!confirm("Undo this sale?")) return;
-    setUndoingId(saleId);
-    try {
-      await api.delete(`/products/sales/${saleId}`);
-      await Promise.all([fetchProducts("cold_drink"), loadRecentSales()]);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setUndoingId(null);
-    }
-  };
+  // Subtract isn't in AppContext (it's specific to this page's correction
+  // flow), so it's called directly and the shared product list is
+  // refetched to pick up the new count.
+  const handleSubtract = useCallback(
+    async (productId) => {
+      try {
+        await api.post(`/products/${productId}/subtract`, { quantity: 1 });
+        await fetchProducts("cold_drink");
+      } catch (err) {
+        console.error("Subtract failed", err);
+      }
+    },
+    [fetchProducts]
+  );
 
   const handleResetDay = async () => {
     if (!confirm("Reset today's cold drink sales to zero? This can't be undone.")) return;
     setResetting(true);
     try {
       await api.post("/products/reset-daily");
-      await Promise.all([fetchProducts("cold_drink"), loadRecentSales()]);
+      await fetchProducts("cold_drink");
     } catch (err) {
       alert(err.message);
     } finally {
@@ -125,7 +142,7 @@ const ColdDrinks = () => {
     <div className="pb-24">
       <PageHeader
         title="Cold Drinks"
-        subtitle="Tap a drink to log a sale"
+        subtitle="Tap a drink, or use +/- to adjust"
         tone="chill"
         action={
           <div className="text-right shrink-0">
@@ -157,55 +174,15 @@ const ColdDrinks = () => {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-32 rounded-2xl bg-ink-100 animate-pulse" />
+              <div key={i} className="h-40 rounded-2xl bg-ink-100 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3">
             {products.map((product) => (
-              <DrinkTile key={product._id} product={product} onSell={handleSell} />
-            ))}
-          </div>
-        )}
-
-        {/* Undo a mis-tap or a bottle the customer wants to exchange — tap
-            the trash-with-arrow icon on the exact sale that needs reversing. */}
-        <h2 className="font-semibold text-ink-900 text-sm mb-2">Recent Sales</h2>
-        {salesLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-14 rounded-xl bg-ink-100 animate-pulse" />
-            ))}
-          </div>
-        ) : recentSales.length === 0 ? (
-          <p className="text-sm text-ink-400 text-center mt-4">No sales yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {recentSales.map((sale) => (
-              <div key={sale._id} className="flex items-center justify-between bg-white rounded-xl p-3 shadow-tile">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink-900">
-                    {sale.product?.name} {sale.product?.variant}
-                    {sale.quantity > 1 ? ` × ${sale.quantity}` : ""}
-                  </p>
-                  <p className="text-xs text-ink-400">
-                    {new Date(sale.transactionDate).toLocaleTimeString("en-PK", { timeStyle: "short" })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
-                  <span className="font-semibold text-sm text-ink-900">{currency(sale.amount)}</span>
-                  <button
-                    onClick={() => handleUndo(sale._id)}
-                    disabled={undoingId === sale._id}
-                    className="text-debt p-1 disabled:opacity-40"
-                    aria-label="Undo sale"
-                  >
-                    <Undo2 size={16} />
-                  </button>
-                </div>
-              </div>
+              <DrinkTile key={product._id} product={product} onAdd={handleAdd} onSubtract={handleSubtract} />
             ))}
           </div>
         )}

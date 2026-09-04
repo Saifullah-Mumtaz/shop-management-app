@@ -23,19 +23,20 @@ export const getCustomerById = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { ...customer, history } });
 });
 
-// @desc  Create a customer. If `amount` is given, it becomes the first
-//        history entry (loan_given for loan accounts, advance_deposit for
-//        advance accounts) and the starting balance — so a new loan
-//        customer created with Name + Amount + Note already shows that
-//        entry in their history, not just a raw balance number.
-// @route POST /api/customers
+// Maps each account type to its own "opening entry" transaction type.
+const OPENING_TYPE = {
+  loan: "loan_given",
+  installment: "installment_given",
+  advance: "advance_deposit",
+};
+
 export const createCustomer = asyncHandler(async (req, res) => {
   const { name, phone, accountType, notes, amount, note } = req.body;
   const customer = await Customer.create({ name, phone, accountType, notes });
 
   const startAmount = Number(amount);
   if (startAmount > 0) {
-    const type = accountType === "loan" ? "loan_given" : "advance_deposit";
+    const type = OPENING_TYPE[accountType] || "advance_deposit";
     await Transaction.create({ customer: customer._id, type, amount: startAmount, note: note || "" });
     customer.balance = startAmount;
     await customer.save();

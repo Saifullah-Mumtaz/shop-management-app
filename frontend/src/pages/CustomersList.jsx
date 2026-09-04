@@ -8,6 +8,7 @@ import PageHeader from "../components/PageHeader";
 const LABELS = {
   loan: { title: "Loan Accounts", cta: "Add loan customer", tone: "debt" },
   advance: { title: "Advance (ADD) Accounts", cta: "Add advance customer", tone: "credit" },
+  installment: { title: "Mobiles & Accessories", cta: "Add installment customer", tone: "debt" },
 };
 
 const CustomersList = ({ accountType }) => {

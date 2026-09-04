@@ -11,12 +11,33 @@ const currency = (n) =>
     n || 0
   );
 
-// Full, honest history: every loan given and every payment received is its
-// own entry with its own color — nothing is ever collapsed into a single
-// running number that has to be recalculated by hand.
+const ACCOUNT_META = {
+  loan: {
+    subtitle: "Loan account",
+    tone: "debt",
+    givenType: "loan_given",
+    repaidType: "loan_repaid",
+    givenLabel: "Loan Given",
+  },
+  installment: {
+    subtitle: "Installment account",
+    tone: "debt",
+    givenType: "installment_given",
+    repaidType: "installment_repaid",
+    givenLabel: "Item Given",
+  },
+  advance: {
+    subtitle: "Advance account",
+    tone: "credit",
+    depositType: "advance_deposit",
+  },
+};
+
 const TXN_META = {
-  loan_given: { label: "Loan given", color: "text-debt", icon: ArrowUpRight, sign: "+" },
+  loan_given: { label: "Given", color: "text-debt", icon: ArrowUpRight, sign: "+" },
   loan_repaid: { label: "Payment received", color: "text-credit", icon: ArrowDownLeft, sign: "−" },
+  installment_given: { label: "Item Given", color: "text-debt", icon: ArrowUpRight, sign: "+" },
+  installment_repaid: { label: "Payment received", color: "text-credit", icon: ArrowDownLeft, sign: "−" },
   advance_deposit: { label: "Entry", color: "text-credit", icon: ArrowUpRight, sign: "+" },
 };
 
@@ -56,13 +77,12 @@ const CustomerDetail = () => {
     load();
   }, [load]);
 
-  const isLoan = customer?.accountType === "loan";
+  const accountType = customer?.accountType;
+  const meta = ACCOUNT_META[accountType] || ACCOUNT_META.advance;
+  const isDebtAccount = accountType === "loan" || accountType === "installment";
 
   const openAddSheet = () => {
-    // Advance accounts skip the type choice entirely — every entry there is
-    // the same operation. Loan accounts need the choice since giving credit
-    // and receiving payment are opposite, equally common operations.
-    setAddForm({ type: isLoan ? "" : "advance_deposit", amount: "", note: "" });
+    setAddForm({ type: isDebtAccount ? "" : meta.depositType, amount: "", note: "" });
     setAddOpen(true);
   };
 
@@ -87,9 +107,6 @@ const CustomerDetail = () => {
     setEditForm({ amount: String(txn.amount), note: txn.note || "" });
   };
 
-  // Editing only ever changes the amount/note of an entry, never its type
-  // (a "loan given" entry stays a "loan given" entry) — this is a
-  // correction to a typo'd number, not a way to flip what happened.
   const handleEditSave = async (e) => {
     e.preventDefault();
     if (!editForm.amount) return;
@@ -123,7 +140,7 @@ const CustomerDetail = () => {
     setDeleting(true);
     try {
       await api.delete(`/customers/${id}`);
-      navigate(isLoan ? "/loans" : "/advances");
+      navigate(`/${accountType}s`);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -148,8 +165,8 @@ const CustomerDetail = () => {
     <div className="pb-24">
       <PageHeader
         title={customer.name}
-        subtitle={isLoan ? "Loan account" : "Advance account"}
-        tone={isLoan ? "debt" : "credit"}
+        subtitle={meta.subtitle}
+        tone={meta.tone}
         action={
           <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-white/90 text-sm">
             <ArrowLeft size={16} /> Back
@@ -159,10 +176,10 @@ const CustomerDetail = () => {
 
       <div className="px-4 -mt-6 max-w-lg mx-auto">
         <div className="bg-white rounded-2xl p-4 shadow-tile mb-4">
-          <p className={`font-display text-2xl font-bold ${isLoan ? "text-debt" : "text-credit"}`}>
+          <p className={`font-display text-2xl font-bold ${isDebtAccount ? "text-debt" : "text-credit"}`}>
             {currency(customer.balance)}
           </p>
-          <p className="text-xs text-ink-400">{isLoan ? "Outstanding balance" : "Remaining credit"}</p>
+          <p className="text-xs text-ink-400">{isDebtAccount ? "Outstanding balance" : "Remaining credit"}</p>
           {customer.phone && <p className="text-xs text-ink-400 mt-2">{customer.phone}</p>}
 
           {canDelete && (
@@ -188,14 +205,14 @@ const CustomerDetail = () => {
         ) : (
           <div className="space-y-2">
             {customer.history.map((txn) => {
-              const meta = TXN_META[txn.type] || { label: txn.type, color: "text-ink-900", icon: ArrowUpRight, sign: "" };
-              const Icon = meta.icon;
+              const tMeta = TXN_META[txn.type] || { label: txn.type, color: "text-ink-900", icon: ArrowUpRight, sign: "" };
+              const Icon = tMeta.icon;
               return (
                 <div key={txn._id} className="flex items-center justify-between bg-white rounded-xl p-3 shadow-tile">
                   <div className="flex items-start gap-2 min-w-0">
-                    <Icon size={16} className={`${meta.color} shrink-0 mt-0.5`} />
+                    <Icon size={16} className={`${tMeta.color} shrink-0 mt-0.5`} />
                     <div className="min-w-0">
-                      <p className={`text-sm font-semibold ${meta.color}`}>{meta.label}</p>
+                      <p className={`text-sm font-semibold ${tMeta.color}`}>{tMeta.label}</p>
                       <p className="text-xs text-ink-400">
                         {new Date(txn.transactionDate).toLocaleString("en-PK", {
                           dateStyle: "medium",
@@ -206,8 +223,8 @@ const CustomerDetail = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-3">
-                    <span className={`font-semibold text-sm mr-1 ${meta.color}`}>
-                      {meta.sign} {currency(txn.amount)}
+                    <span className={`font-semibold text-sm mr-1 ${tMeta.color}`}>
+                      {tMeta.sign} {currency(txn.amount)}
                     </span>
                     <button onClick={() => openEdit(txn)} className="text-ink-400 p-1" aria-label="Edit entry">
                       <Pencil size={16} />
@@ -223,30 +240,24 @@ const CustomerDetail = () => {
         )}
       </div>
 
-      {/* Loan: choose Loan Given vs Payment Received. Advance: type is
-          preset, so only the amount/note fields show. */}
       <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add entry">
         <form onSubmit={handleAdd} className="space-y-3">
-          {isLoan && (
+          {isDebtAccount && (
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setAddForm({ ...addForm, type: "loan_given" })}
+                onClick={() => setAddForm({ ...addForm, type: meta.givenType })}
                 className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
-                  addForm.type === "loan_given"
-                    ? "bg-debt border-debt text-white"
-                    : "border-ink-100 text-debt"
+                  addForm.type === meta.givenType ? "bg-debt border-debt text-white" : "border-ink-100 text-debt"
                 }`}
               >
-                Loan Given
+                {meta.givenLabel}
               </button>
               <button
                 type="button"
-                onClick={() => setAddForm({ ...addForm, type: "loan_repaid" })}
+                onClick={() => setAddForm({ ...addForm, type: meta.repaidType })}
                 className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
-                  addForm.type === "loan_repaid"
-                    ? "bg-credit border-credit text-white"
-                    : "border-ink-100 text-credit"
+                  addForm.type === meta.repaidType ? "bg-credit border-credit text-white" : "border-ink-100 text-credit"
                 }`}
               >
                 Payment Received

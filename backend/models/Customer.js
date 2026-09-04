@@ -20,11 +20,11 @@ const customerSchema = new mongoose.Schema(
       default: "",
     },
     accountType: {
-      type: String,
-      enum: ["loan", "advance"], // loan = they owe the shop, advance = shop owes them / prepaid credit
-      required: true,
-      index: true,
-    },
+  type: String,
+  enum: ["loan", "advance", "installment"],
+  required: true,
+  index: true,
+},
     // Positive = customer owes the shop (loan). For 'advance' accounts this
     // represents remaining prepaid credit.
     balance: {
