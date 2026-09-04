@@ -84,122 +84,144 @@ const CustomerDetail = () => {
 
   // --- NATIVE PDF GENERATION & WHATSAPP SHARING LOGIC ---
  const handleShareWhatsAppPDF = async () => {
-    if (!customer) return;
+  if (!customer) return;
 
-    const doc = new jsPDF();
-    const shopName = "Bahadur Photostate and Communication";
+  const doc = new jsPDF();
+  const shopName = "Bahadur Photostate and Communication";
 
-    // Header Section
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(30, 41, 59);
-    doc.text(shopName, 14, 18);
+  // Header Section
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(30, 41, 59);
+  doc.text(shopName, 14, 18);
 
-    doc.setFontSize(11);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Customer Account Ledger Statement", 14, 25);
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Customer Account History", 14, 25);
 
-    // Customer Information Box
-    doc.setDrawColor(226, 232, 240);
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(14, 32, 182, 22, 2, 2, "FD");
+  // Customer Information Box
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, 32, 182, 22, 2, 2, "FD");
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`Customer: ${customer.name}`, 18, 40);
-    doc.text(`Phone: ${customer.phone || "N/A"}`, 18, 48);
-    doc.text(`Remaining: ${currency(customer.balance)}`, 130, 44);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Customer: ${customer.name}`, 18, 40);
+  doc.text(`Phone: ${customer.phone || "N/A"}`, 18, 48);
+  doc.text(`Balance: ${currency(customer.balance)}`, 130, 44);
 
-    // Table Header
-    let currentY = 62;
-    doc.setFillColor(41, 128, 185);
+  // Table Header
+  let currentY = 62;
+  doc.setFillColor(41, 128, 185);
+  doc.rect(14, currentY, 182, 8, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text("Date & Time", 18, currentY + 5.5);
+  doc.text("Type", 68, currentY + 5.5);
+  doc.text("Note", 108, currentY + 5.5);
+  doc.text("Amount", 175, currentY + 5.5, { align: "right" });
+
+  currentY += 8;
+
+  // Render Rows
+  const history = customer.history || [];
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+
+  history.forEach((txn, index) => {
+    if (currentY > 275) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    const formattedDate = new Date(txn.transactionDate).toLocaleString("en-PK", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    const label = TXN_META[txn.type]?.label || txn.type;
+    const sign = TXN_META[txn.type]?.sign || "";
+    const amountStr = `${sign} Rs ${txn.amount.toLocaleString("en-PK")}`;
+
+    doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252);
     doc.rect(14, currentY, 182, 8, "F");
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Date & Time", 18, currentY + 5.5);
-    doc.text("Type", 68, currentY + 5.5);
-    doc.text("Note", 108, currentY + 5.5);
-    doc.text("Amount", 175, currentY + 5.5, { align: "right" });
+    doc.setTextColor(51, 65, 85);
+    doc.text(formattedDate, 18, currentY + 5.5);
+    doc.text(label, 68, currentY + 5.5);
+    doc.text(txn.note || "-", 108, currentY + 5.5, { maxWidth: 60 });
+    doc.text(amountStr, 175, currentY + 5.5, { align: "right" });
 
     currentY += 8;
+  });
 
-    // Render Rows
-    const history = customer.history || [];
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+  // Output PDF Blob & File
+  const pdfBlob = doc.output("blob");
+  const fileName = `${customer.name.replace(/\s+/g, '_')}_Statement.pdf`;
+  const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
 
-    history.forEach((txn, index) => {
-      if (currentY > 275) {
-        doc.addPage();
-        currentY = 20;
-      }
+  // Detect standalone/PWA mode (home screen shortcut)
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true; // iOS
 
-      const formattedDate = new Date(txn.transactionDate).toLocaleString("en-PK", {
-        dateStyle: "medium",
-        timeStyle: "short",
+  const canFileShare =
+    navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] });
+
+  let shareFailed = false;
+
+  // 📱 SHARE ATTEMPT
+  if (canFileShare) {
+    try {
+      await navigator.share({
+        title: `Ledger Statement - ${customer.name}`,
+        text: `Hello ${customer.name}, here is your latest statement from ${shopName}. remaining Balance: ${currency(customer.balance)}`,
+        files: [pdfFile],
       });
-      const label = TXN_META[txn.type]?.label || txn.type;
-      const sign = TXN_META[txn.type]?.sign || "";
-      const amountStr = `${sign} Rs ${txn.amount.toLocaleString("en-PK")}`;
-
-      doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252);
-      doc.rect(14, currentY, 182, 8, "F");
-
-      doc.setTextColor(51, 65, 85);
-      doc.text(formattedDate, 18, currentY + 5.5);
-      doc.text(label, 68, currentY + 5.5);
-      doc.text(txn.note || "-", 108, currentY + 5.5, { maxWidth: 60 });
-      doc.text(amountStr, 175, currentY + 5.5, { align: "right" });
-
-      currentY += 8;
-    });
-
-    // Output PDF Blob & File
-    const pdfBlob = doc.output("blob");
-    const fileName = `${customer.name.replace(/\s+/g, '_')}_Statement.pdf`;
-    const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
-
-    // 📱 MOBILE CHECK: Agar mobile device hai aur share API support hai, toh direct Share Sheet kholo
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      try {
-        await navigator.share({
-          title: `Ledger Statement - ${customer.name}`,
-          text: `Hello ${customer.name}, here is your latest statement from ${shopName}. Total Remaining: ${currency(customer.balance)}`,
-          files: [pdfFile],
-        });
-        return;
-      } catch (err) {
-        console.log("User cancelled share or mobile blocked it", err);
+      return; // ✅ Share successful
+    } catch (err) {
+      console.warn("Share error:", err.name, err.message);
+      if (err.name === "AbortError") {
+        return; // User ne khud cancel kiya
       }
+      shareFailed = true; // koi aur error — neeche standalone check hoga
     }
+  }
 
-    // 💻 PC / FALLBACK CHECK: Agar mobile share nahi chala ya PC par hain
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-    
-    // Agar mobile par hain lekin navigator.share fail ho gaya, toh download link trigger karein
-    const downloadLink = document.createElement("a");
-    downloadLink.href = pdfUrl;
-    downloadLink.download = fileName;
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
-
-    // Agar customer ka phone number hai, toh WhatsApp chat link open karein
-    if (customer.phone) {
-      const phoneClean = customer.phone.replace(/\D/g, "");
-      const waText = encodeURIComponent(
-        `Hello *${customer.name}*,\nHere is your statement from *${shopName}*.\nOutstanding Balance: *${currency(customer.balance)}*\n*(PDF file downloaded to your device)*`
-      );
-      // Mobile par window.open ki bajaye location.href ziada reliable hota hai PWA/Mobile browsers mein
-      setTimeout(() => {
-        window.open(`https://wa.me/${phoneClean}?text=${waText}`, "_blank");
-      }, 500);
+  // 🚫 Standalone mode mein blob download bhej hi mat karo (Chrome isko insecure maan kar
+  // "can't be downloaded securely" warning deta hai) — chahe share try hui ho ya na hui ho
+  if (isStandalone && (!canFileShare || shareFailed)) {
+    const confirmOpen = window.confirm(
+      "PDF share karne ke liye is app ko apne browser (Chrome) mein khulna zaroori hai. Ab open karna chahte hain?"
+    );
+    if (confirmOpen) {
+      window.open(window.location.href, "_blank");
     }
-  };
+    return; // download fallback bilkul skip
+  }
 
+  // 💻 GENUINE FALLBACK — sirf normal browser tab (non-standalone) ke liye chalega
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const downloadLink = document.createElement("a");
+  downloadLink.href = pdfUrl;
+  downloadLink.download = fileName;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+
+  if (customer.phone) {
+    const phoneClean = customer.phone.replace(/\D/g, "");
+    const waText = encodeURIComponent(
+      `Hello *${customer.name}*,\nHere is your statement from *${shopName}*.\nRemaining Balance: *${currency(customer.balance)}*\n*(PDF file downloaded to your device)*`
+    );
+    setTimeout(() => {
+      window.open(`https://wa.me/${phoneClean}?text=${waText}`, "_blank");
+    }, 500);
+  }
+};
   const openAddSheet = () => {
     setAddForm({ type: isDebtAccount ? "" : meta.depositType, amount: "", note: "" });
     setAddOpen(true);
