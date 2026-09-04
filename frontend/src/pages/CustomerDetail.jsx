@@ -42,6 +42,18 @@ const TXN_META = {
   advance_deposit: { label: "Entry", color: "text-credit", icon: ArrowUpRight, sign: "+" },
 };
 
+// 🎨 PDF color palette
+const PDF_COLORS = {
+  green: [22, 163, 74],     // payment received
+  red: [220, 38, 38],       // loan / given
+  gray: [51, 65, 85],       // neutral text
+  lightGray: [100, 116, 139],
+  headerBlue: [41, 128, 185],
+  border: [226, 232, 240],
+  bgLight: [248, 250, 252],
+  dark: [15, 23, 42],
+};
+
 const CustomerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,145 +95,232 @@ const CustomerDetail = () => {
   const isDebtAccount = accountType === "loan" || accountType === "installment";
 
   // --- NATIVE PDF GENERATION & WHATSAPP SHARING LOGIC ---
- const handleShareWhatsAppPDF = async () => {
-  if (!customer) return;
+  const handleShareWhatsAppPDF = async () => {
+    if (!customer) return;
 
-  const doc = new jsPDF();
-  const shopName = "Bahadur Photostate and Communication";
+    const doc = new jsPDF();
+    const shopName = "Bahadur Photostate and Communication";
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+    const tableWidth = pageWidth - marginX * 2;
 
-  // Header Section
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(30, 41, 59);
-  doc.text(shopName, 14, 18);
+    // ===== HEADER =====
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(PDF_COLORS.dark[0], PDF_COLORS.dark[1], PDF_COLORS.dark[2]);
+    doc.text(shopName, marginX, 18);
 
-  doc.setFontSize(11);
-  doc.setTextColor(100, 116, 139);
-  doc.text("Customer Account History", 14, 25);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(PDF_COLORS.lightGray[0], PDF_COLORS.lightGray[1], PDF_COLORS.lightGray[2]);
+    doc.text("Customer Account History", marginX, 25);
 
-  // Customer Information Box
-  doc.setDrawColor(226, 232, 240);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, 32, 182, 22, 2, 2, "FD");
+    // Generated timestamp (top-right)
+    const generatedOn = new Date().toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" });
+    doc.setFontSize(8.5);
+    doc.text(`Generated: ${generatedOn}`, pageWidth - marginX, 18, { align: "right" });
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Customer: ${customer.name}`, 18, 40);
-  doc.text(`Phone: ${customer.phone || "N/A"}`, 18, 48);
-  doc.text(`Balance: ${currency(customer.balance)}`, 130, 44);
+    // Thin divider under header
+    doc.setDrawColor(PDF_COLORS.border[0], PDF_COLORS.border[1], PDF_COLORS.border[2]);
+    doc.setLineWidth(0.4);
+    doc.line(marginX, 27, pageWidth - marginX, 27);
 
-  // Table Header
-  let currentY = 62;
-  doc.setFillColor(41, 128, 185);
-  doc.rect(14, currentY, 182, 8, "F");
+    // ===== CUSTOMER INFO BOX =====
+    doc.setDrawColor(PDF_COLORS.border[0], PDF_COLORS.border[1], PDF_COLORS.border[2]);
+    doc.setFillColor(PDF_COLORS.bgLight[0], PDF_COLORS.bgLight[1], PDF_COLORS.bgLight[2]);
+    doc.roundedRect(marginX, 32, tableWidth, 22, 2, 2, "FD");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("Date & Time", 18, currentY + 5.5);
-  doc.text("Type", 68, currentY + 5.5);
-  doc.text("Note", 108, currentY + 5.5);
-  doc.text("Amount", 175, currentY + 5.5, { align: "right" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(PDF_COLORS.dark[0], PDF_COLORS.dark[1], PDF_COLORS.dark[2]);
+    doc.text(`Customer: ${customer.name}`, marginX + 4, 40);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(PDF_COLORS.lightGray[0], PDF_COLORS.lightGray[1], PDF_COLORS.lightGray[2]);
+    doc.text(`Phone: ${customer.phone || "N/A"}`, marginX + 4, 48);
 
-  currentY += 8;
+    const balanceColor = isDebtAccount ? PDF_COLORS.red : PDF_COLORS.green;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
+    doc.text(`Balance: ${currency(customer.balance)}`, pageWidth - marginX - 4, 44, { align: "right" });
 
-  // Render Rows
-  const history = customer.history || [];
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+    // ===== TABLE HEADER =====
+    let currentY = 62;
+    const drawTableHeader = (y) => {
+      doc.setFillColor(PDF_COLORS.headerBlue[0], PDF_COLORS.headerBlue[1], PDF_COLORS.headerBlue[2]);
+      doc.roundedRect(marginX, y, tableWidth, 9, 1.5, 1.5, "F");
 
-  history.forEach((txn, index) => {
-    if (currentY > 275) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text("Date & Time", marginX + 4, y + 6);
+      doc.text("Type", marginX + 54, y + 6);
+      doc.text("Note", marginX + 94, y + 6);
+      doc.text("Amount", pageWidth - marginX - 4, y + 6, { align: "right" });
+      return y + 9;
+    };
+
+    currentY = drawTableHeader(currentY);
+
+    // ===== TABLE ROWS =====
+    const history = customer.history || [];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    let totalReceived = 0;
+    let totalGiven = 0;
+
+    history.forEach((txn, index) => {
+      if (currentY > 268) {
+        doc.addPage();
+        currentY = 20;
+        currentY = drawTableHeader(currentY);
+      }
+
+      const tMeta = TXN_META[txn.type];
+      const label = tMeta?.label || txn.type;
+      const sign = tMeta?.sign || "";
+      const amountStr = `${sign} ${currency(txn.amount)}`;
+      const isCredit = tMeta?.color === "text-credit";
+      const rowColor = isCredit ? PDF_COLORS.green : PDF_COLORS.red;
+
+      if (isCredit) totalReceived += txn.amount;
+      else totalGiven += txn.amount;
+
+      const formattedDate = new Date(txn.transactionDate).toLocaleString("en-PK", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+
+      const rowHeight = 9;
+
+      if (index % 2 !== 0) {
+        doc.setFillColor(PDF_COLORS.bgLight[0], PDF_COLORS.bgLight[1], PDF_COLORS.bgLight[2]);
+        doc.rect(marginX, currentY, tableWidth, rowHeight, "F");
+      }
+
+      doc.setFillColor(rowColor[0], rowColor[1], rowColor[2]);
+      doc.rect(marginX, currentY, 1.2, rowHeight, "F");
+      doc.circle(marginX + 55, currentY + rowHeight / 2 - 0.5, 1, "F");
+
+      doc.setTextColor(PDF_COLORS.gray[0], PDF_COLORS.gray[1], PDF_COLORS.gray[2]);
+      doc.text(formattedDate, marginX + 4, currentY + 6);
+
+      doc.setTextColor(rowColor[0], rowColor[1], rowColor[2]);
+      doc.setFont("helvetica", "bold");
+      doc.text(label, marginX + 58, currentY + 6);
+      doc.setFont("helvetica", "normal");
+
+      doc.setTextColor(PDF_COLORS.gray[0], PDF_COLORS.gray[1], PDF_COLORS.gray[2]);
+      doc.text(txn.note || "-", marginX + 94, currentY + 6, { maxWidth: 55 });
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(rowColor[0], rowColor[1], rowColor[2]);
+      doc.text(amountStr, pageWidth - marginX - 4, currentY + 6, { align: "right" });
+      doc.setFont("helvetica", "normal");
+
+      currentY += rowHeight;
+    });
+
+    doc.setDrawColor(PDF_COLORS.border[0], PDF_COLORS.border[1], PDF_COLORS.border[2]);
+    doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+    // ===== SUMMARY BOX =====
+    if (currentY > 250) {
       doc.addPage();
       currentY = 20;
     }
-
-    const formattedDate = new Date(txn.transactionDate).toLocaleString("en-PK", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-    const label = TXN_META[txn.type]?.label || txn.type;
-    const sign = TXN_META[txn.type]?.sign || "";
-    const amountStr = `${sign} Rs ${txn.amount.toLocaleString("en-PK")}`;
-
-    doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252);
-    doc.rect(14, currentY, 182, 8, "F");
-
-    doc.setTextColor(51, 65, 85);
-    doc.text(formattedDate, 18, currentY + 5.5);
-    doc.text(label, 68, currentY + 5.5);
-    doc.text(txn.note || "-", 108, currentY + 5.5, { maxWidth: 60 });
-    doc.text(amountStr, 175, currentY + 5.5, { align: "right" });
-
     currentY += 8;
-  });
 
-  // Output PDF Blob & File
-  const pdfBlob = doc.output("blob");
-  const fileName = `${customer.name.replace(/\s+/g, '_')}_Statement.pdf`;
-  const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+    doc.setDrawColor(PDF_COLORS.border[0], PDF_COLORS.border[1], PDF_COLORS.border[2]);
+    doc.setFillColor(PDF_COLORS.bgLight[0], PDF_COLORS.bgLight[1], PDF_COLORS.bgLight[2]);
+    doc.roundedRect(marginX, currentY, tableWidth, 20, 2, 2, "FD");
 
-  // Detect standalone/PWA mode (home screen shortcut)
-  const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone === true; // iOS
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
 
-  const canFileShare =
-    navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] });
+    doc.setTextColor(PDF_COLORS.green[0], PDF_COLORS.green[1], PDF_COLORS.green[2]);
+    doc.text(`Total Received: ${currency(totalReceived)}`, marginX + 4, currentY + 8);
 
-  let shareFailed = false;
+    doc.setTextColor(PDF_COLORS.red[0], PDF_COLORS.red[1], PDF_COLORS.red[2]);
+    doc.text(`Total Given: ${currency(totalGiven)}`, marginX + 4, currentY + 15.5);
 
-  // 📱 SHARE ATTEMPT
-  if (canFileShare) {
-    try {
-      await navigator.share({
-        title: `Ledger Statement - ${customer.name}`,
-        text: `Hello ${customer.name}, here is your latest statement from ${shopName}. remaining Balance: ${currency(customer.balance)}`,
-        files: [pdfFile],
-      });
-      return; // ✅ Share successful
-    } catch (err) {
-      console.warn("Share error:", err.name, err.message);
-      if (err.name === "AbortError") {
-        return; // User ne khud cancel kiya
+    doc.setFontSize(11);
+    doc.setTextColor(balanceColor[0], balanceColor[1], balanceColor[2]);
+    doc.text(`Net Balance: ${currency(customer.balance)}`, pageWidth - marginX - 4, currentY + 11.5, {
+      align: "right",
+    });
+
+    // ===== FOOTER =====
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(PDF_COLORS.lightGray[0], PDF_COLORS.lightGray[1], PDF_COLORS.lightGray[2]);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, 290, { align: "center" });
+      doc.text(shopName, marginX, 290);
+    }
+
+    // ===== OUTPUT PDF =====
+    const pdfBlob = doc.output("blob");
+    const fileName = `${customer.name.replace(/\s+/g, '_')}_Statement.pdf`;
+    const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+
+    const canFileShare =
+      navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] });
+
+    let shareFailed = false;
+
+    if (canFileShare) {
+      try {
+        await navigator.share({
+          title: `Ledger Statement - ${customer.name}`,
+          text: `Hello ${customer.name}, here is your latest statement from ${shopName}. Remaining Balance: ${currency(customer.balance)}`,
+          files: [pdfFile],
+        });
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") {
+          return;
+        }
+        shareFailed = true;
       }
-      shareFailed = true; // koi aur error — neeche standalone check hoga
     }
-  }
 
-  // 🚫 Standalone mode mein blob download bhej hi mat karo (Chrome isko insecure maan kar
-  // "can't be downloaded securely" warning deta hai) — chahe share try hui ho ya na hui ho
-  if (isStandalone && (!canFileShare || shareFailed)) {
-    const confirmOpen = window.confirm(
-      "PDF share karne ke liye is app ko apne browser (Chrome) mein khulna zaroori hai. Ab open karna chahte hain?"
-    );
-    if (confirmOpen) {
-      window.open(window.location.href, "_blank");
+    if (isStandalone && (!canFileShare || shareFailed)) {
+      const confirmOpen = window.confirm(
+        "PDF share karne ke liye is app ko apne browser (Chrome) mein khulna zaroori hai. Ab open karna chahte hain?"
+      );
+      if (confirmOpen) {
+        window.open(window.location.href, "_blank");
+      }
+      return;
     }
-    return; // download fallback bilkul skip
-  }
 
-  // 💻 GENUINE FALLBACK — sirf normal browser tab (non-standalone) ke liye chalega
-  const pdfUrl = URL.createObjectURL(pdfBlob);
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const downloadLink = document.createElement("a");
+    downloadLink.href = pdfUrl;
+    downloadLink.download = fileName;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
 
-  const downloadLink = document.createElement("a");
-  downloadLink.href = pdfUrl;
-  downloadLink.download = fileName;
-  document.body.appendChild(downloadLink);
-  downloadLink.click();
-  document.body.removeChild(downloadLink);
+    if (customer.phone) {
+      const phoneClean = customer.phone.replace(/\D/g, "");
+      const waText = encodeURIComponent(
+        `Hello *${customer.name}*,\nHere is your statement from *${shopName}*.\nRemaining Balance: *${currency(customer.balance)}*\n*(PDF file downloaded to your device)*`
+      );
+      setTimeout(() => {
+        window.open(`https://wa.me/${phoneClean}?text=${waText}`, "_blank");
+      }, 500);
+    }
+  };
 
-  if (customer.phone) {
-    const phoneClean = customer.phone.replace(/\D/g, "");
-    const waText = encodeURIComponent(
-      `Hello *${customer.name}*,\nHere is your statement from *${shopName}*.\nRemaining Balance: *${currency(customer.balance)}*\n*(PDF file downloaded to your device)*`
-    );
-    setTimeout(() => {
-      window.open(`https://wa.me/${phoneClean}?text=${waText}`, "_blank");
-    }, 500);
-  }
-};
   const openAddSheet = () => {
     setAddForm({ type: isDebtAccount ? "" : meta.depositType, amount: "", note: "" });
     setAddOpen(true);
@@ -326,7 +425,6 @@ const CustomerDetail = () => {
               {customer.phone && <p className="text-xs text-ink-400 mt-2">{customer.phone}</p>}
             </div>
 
-            {/* WhatsApp PDF Share Button */}
             <button
               onClick={handleShareWhatsAppPDF}
               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow transition-colors"
