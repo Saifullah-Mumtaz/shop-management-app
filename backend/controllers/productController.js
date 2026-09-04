@@ -68,11 +68,7 @@ export const resetDailyStats = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Today's cold drink counters reset" });
 });
 
-// @desc  List recent cold drink sales — used to undo a mis-tap or a
-//        customer exchange (e.g. they take a 1.5L, come back, want a
-//        2.25L instead). Shows each sale with the product name so the
-//        owner can find and reverse the right one.
-// @route GET /api/products/sales/recent?limit=15
+
 export const getRecentSales = asyncHandler(async (req, res) => {
   const limit = Number(req.query.limit) || 15;
   const sales = await Transaction.find({ type: "cold_drink_sale" })
@@ -83,12 +79,7 @@ export const getRecentSales = asyncHandler(async (req, res) => {
   res.json({ success: true, data: sales });
 });
 
-// @desc  Undo a single cold drink sale — reverses it out of the product's
-//        running dailyCount/dailyRevenue AND deletes the transaction
-//        record. This is a full undo (not a new "return" entry), since a
-//        mis-tap or exchanged bottle should disappear entirely rather than
-//        show up as a separate negative line.
-// @route DELETE /api/products/sales/:id
+
 export const undoSale = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   try {
