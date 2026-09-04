@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Pencil, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, ArrowUpRight, ArrowDownLeft, Share2 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import api from "../api/axios";
 import { useCustomerActions } from "../context/AppContext";
 import BottomSheet from "../components/BottomSheet";
@@ -80,6 +81,124 @@ const CustomerDetail = () => {
   const accountType = customer?.accountType;
   const meta = ACCOUNT_META[accountType] || ACCOUNT_META.advance;
   const isDebtAccount = accountType === "loan" || accountType === "installment";
+
+  // --- NATIVE PDF GENERATION & WHATSAPP SHARING LOGIC ---
+ const handleShareWhatsAppPDF = async () => {
+    if (!customer) return;
+
+    const doc = new jsPDF();
+    const shopName = "Bahadur Photostate and Communication";
+
+    // Header Section
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59);
+    doc.text(shopName, 14, 18);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Customer Account Ledger Statement", 14, 25);
+
+    // Customer Information Box
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, 32, 182, 22, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Customer: ${customer.name}`, 18, 40);
+    doc.text(`Phone: ${customer.phone || "N/A"}`, 18, 48);
+    doc.text(`Remaining: ${currency(customer.balance)}`, 130, 44);
+
+    // Table Header
+    let currentY = 62;
+    doc.setFillColor(41, 128, 185);
+    doc.rect(14, currentY, 182, 8, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Date & Time", 18, currentY + 5.5);
+    doc.text("Type", 68, currentY + 5.5);
+    doc.text("Note", 108, currentY + 5.5);
+    doc.text("Amount", 175, currentY + 5.5, { align: "right" });
+
+    currentY += 8;
+
+    // Render Rows
+    const history = customer.history || [];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    history.forEach((txn, index) => {
+      if (currentY > 275) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      const formattedDate = new Date(txn.transactionDate).toLocaleString("en-PK", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+      const label = TXN_META[txn.type]?.label || txn.type;
+      const sign = TXN_META[txn.type]?.sign || "";
+      const amountStr = `${sign} Rs ${txn.amount.toLocaleString("en-PK")}`;
+
+      doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252);
+      doc.rect(14, currentY, 182, 8, "F");
+
+      doc.setTextColor(51, 65, 85);
+      doc.text(formattedDate, 18, currentY + 5.5);
+      doc.text(label, 68, currentY + 5.5);
+      doc.text(txn.note || "-", 108, currentY + 5.5, { maxWidth: 60 });
+      doc.text(amountStr, 175, currentY + 5.5, { align: "right" });
+
+      currentY += 8;
+    });
+
+    // Output PDF Blob & File
+    const pdfBlob = doc.output("blob");
+    const fileName = `${customer.name.replace(/\s+/g, '_')}_Statement.pdf`;
+    const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+    // 📱 MOBILE CHECK: Agar mobile device hai aur share API support hai, toh direct Share Sheet kholo
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      try {
+        await navigator.share({
+          title: `Ledger Statement - ${customer.name}`,
+          text: `Hello ${customer.name}, here is your latest statement from ${shopName}. Total Remaining: ${currency(customer.balance)}`,
+          files: [pdfFile],
+        });
+        return;
+      } catch (err) {
+        console.log("User cancelled share or mobile blocked it", err);
+      }
+    }
+
+    // 💻 PC / FALLBACK CHECK: Agar mobile share nahi chala ya PC par hain
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    
+    // Agar mobile par hain lekin navigator.share fail ho gaya, toh download link trigger karein
+    const downloadLink = document.createElement("a");
+    downloadLink.href = pdfUrl;
+    downloadLink.download = fileName;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+
+    // Agar customer ka phone number hai, toh WhatsApp chat link open karein
+    if (customer.phone) {
+      const phoneClean = customer.phone.replace(/\D/g, "");
+      const waText = encodeURIComponent(
+        `Hello *${customer.name}*,\nHere is your statement from *${shopName}*.\nOutstanding Balance: *${currency(customer.balance)}*\n*(PDF file downloaded to your device)*`
+      );
+      // Mobile par window.open ki bajaye location.href ziada reliable hota hai PWA/Mobile browsers mein
+      setTimeout(() => {
+        window.open(`https://wa.me/${phoneClean}?text=${waText}`, "_blank");
+      }, 500);
+    }
+  };
 
   const openAddSheet = () => {
     setAddForm({ type: isDebtAccount ? "" : meta.depositType, amount: "", note: "" });
@@ -176,11 +295,23 @@ const CustomerDetail = () => {
 
       <div className="px-4 -mt-6 max-w-lg mx-auto">
         <div className="bg-white rounded-2xl p-4 shadow-tile mb-4">
-          <p className={`font-display text-2xl font-bold ${isDebtAccount ? "text-debt" : "text-credit"}`}>
-            {currency(customer.balance)}
-          </p>
-          <p className="text-xs text-ink-400">{isDebtAccount ? "Outstanding balance" : "Remaining credit"}</p>
-          {customer.phone && <p className="text-xs text-ink-400 mt-2">{customer.phone}</p>}
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`font-display text-2xl font-bold ${isDebtAccount ? "text-debt" : "text-credit"}`}>
+                {currency(customer.balance)}
+              </p>
+              <p className="text-xs text-ink-400">{isDebtAccount ? "Outstanding balance" : "Remaining credit"}</p>
+              {customer.phone && <p className="text-xs text-ink-400 mt-2">{customer.phone}</p>}
+            </div>
+
+            {/* WhatsApp PDF Share Button */}
+            <button
+              onClick={handleShareWhatsAppPDF}
+              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow transition-colors"
+            >
+              <Share2 size={14} /> WhatsApp PDF
+            </button>
+          </div>
 
           {canDelete && (
             <button
