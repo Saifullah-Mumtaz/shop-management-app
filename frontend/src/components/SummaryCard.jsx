@@ -13,7 +13,11 @@ const SummaryCard = ({ label, value, accent = "brand", subtext }) => {
       <span className="text-xs font-medium text-ink-400 uppercase tracking-wide truncate">
         {label}
       </span>
-      <span className="font-display text-2xl font-bold text-ink-900 truncate">{value}</span>
+      {/* Smaller, and allowed to wrap instead of truncating — large amounts
+          (5+ digits) now fit without getting cut off or overflowing. */}
+      <span className="font-display text-lg font-bold text-ink-900 leading-snug break-words">
+        {value}
+      </span>
       {subtext && (
         <span
           className={`self-start mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${accentClasses[accent]}`}

@@ -17,7 +17,10 @@ const Dashboard = () => {
 
   return (
     <div className="pb-24">
-      <PageHeader title="Shop Ledger" subtitle="Today at a glance" tone="brand" />
+      {/* Shop name as the header, same colorful gradient style used across
+          every other page — this is the app's front door, so it gets the
+          brand tone rather than a plain white top. */}
+      <PageHeader title="Bahadur Photostate" subtitle="Shop Ledger" tone="brand" />
 
       <div className="px-4 -mt-6 max-w-lg mx-auto">
         {error && (
@@ -38,18 +41,6 @@ const Dashboard = () => {
             value={loading ? "…" : currency(summary?.totalAdvance)}
             accent="credit"
             subtext="Prepaid credit"
-          />
-          <SummaryCard
-            label="Cold Drinks"
-            value={loading ? "…" : currency(summary?.coldDrinkSalesToday?.revenue)}
-            accent="chill"
-            subtext={`${summary?.coldDrinkSalesToday?.units || 0} sold today`}
-          />
-          <SummaryCard
-            label="Total Accounts"
-            value={loading ? "…" : summary?.totalAccounts ?? 0}
-            accent="brand"
-            subtext="Active"
           />
         </div>
       </div>
