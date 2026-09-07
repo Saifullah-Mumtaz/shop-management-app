@@ -18,7 +18,7 @@ const sampleProducts = [
   { name: "Branded Water", variant: "0.5L", price: 60, profit: 10, category: "cold_drink", imageUrl: "/bottles/aquafina-500ml.jpeg" },
   { name: "Slice", variant: "Juice", price: 60, profit: 16, category: "cold_drink", imageUrl: "/bottles/slice.jpeg" },
    { name: "Slice", variant: "1L", price: 200, profit: 45, category: "cold_drink", imageUrl: "/bottles/slice-1l.jpg" },
-    { name: "Slice", variant: "300mL", price: 90, profit: 28, category: "cold_drink", imageUrl: "/bottles/slice-355ml.jpg" },
+    { name: "Slice", variant: "300mL", price: 90, profit: 28, category: "cold_drink", imageUrl: "/bottles/slice-355ml.jfif" },
      { name: "Pepsi", variant: "0.5L", price: 120, profit: 20, category: "cold_drink", imageUrl: "/bottles/pipsi-0.5ml.webp" },
   { name: "Local Water", variant: "1L", price: 70, profit: 20, category: "cold_drink", imageUrl: "/bottles/1.5-ltr-water.webp" },
   { name: "Local Water", variant: "0.5L", price: 30, profit: 10, category: "cold_drink", imageUrl: "/bottles/local-500ml.jpeg" },
