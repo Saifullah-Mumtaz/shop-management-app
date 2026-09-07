@@ -18,14 +18,12 @@ const sampleProducts = [
   { name: "Branded Water", variant: "0.5L", price: 60, profit: 10, category: "cold_drink", imageUrl: "/bottles/aquafina-500ml.jpeg" },
   { name: "Slice", variant: "Juice", price: 60, profit: 16, category: "cold_drink", imageUrl: "/bottles/slice.jpeg" },
    { name: "Slice", variant: "1L", price: 200, profit: 45, category: "cold_drink", imageUrl: "/bottles/slice-1l.jpg" },
-    { name: "Slice", variant: "300mL", price: 90, profit: 28, category: "cold_drink", imageUrl: "/bottles/slice-300ml.jpg" },
-     { name: "Pepsi", variant: "0.5L", price: 120, profit: 20, category: "cold_drink", imageUrl: "/bottles/pepsi-500ml.jfif" },
+    { name: "Slice", variant: "300mL", price: 90, profit: 28, category: "cold_drink", imageUrl: "/bottles/slice-355ml.jpg" },
+     { name: "Pepsi", variant: "0.5L", price: 120, profit: 20, category: "cold_drink", imageUrl: "/bottles/pipsi-0.5ml.webp" },
   { name: "Local Water", variant: "1L", price: 70, profit: 20, category: "cold_drink", imageUrl: "/bottles/1.5-ltr-water.webp" },
   { name: "Local Water", variant: "0.5L", price: 30, profit: 10, category: "cold_drink", imageUrl: "/bottles/local-500ml.jpeg" },
   { name: "Sting", variant: "300ml", price: 100, profit: 27, category: "cold_drink", imageUrl: "/bottles/sting-300ml.jpg" },
 { name: "Sting", variant: "0.5l", price: 140, profit: 23, category: "cold_drink", imageUrl: "/bottles/sting-300ml.jpg" },
-  // Disposable glass — sold as its own tappable tile, ₹5 each, added straight
-  // into the same cold-drink sales total.
   { name: "Disposable Glass", variant: "", price: 5, profit: 2, category: "cold_drink", imageUrl: "/bottles/disposible.webp" },
 ];
 
