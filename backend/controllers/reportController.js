@@ -91,7 +91,7 @@ export const getTransactionsByDate = asyncHandler(async (req, res) => {
   endOfDay.setHours(23, 59, 59, 999);
 
   const transactions = await Transaction.find({
-    type: { $in: ["loan_given", "loan_repaid", "advance_deposit"] },
+    type: { $in: ["loan_given", "loan_repaid", "advance_deposit","advance_used"] },
     transactionDate: { $gte: startOfDay, $lte: endOfDay },
   })
     .sort({ transactionDate: -1 })

@@ -11,6 +11,7 @@ const ENTRY_META = {
   loan_given: { label: "Loan given", color: "text-debt" },
   loan_repaid: { label: "Payment received", color: "text-credit" },
   advance_deposit: { label: "Advance deposit", color: "text-credit" },
+  advance_used: { label: "Advance returned", color: "text-debt" }, // 👈 Yeh add kar diya hai
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -30,7 +31,12 @@ const DailyReport = () => {
         api.get("/reports/transactions", { params: { date: d } }),
       ]);
       setReport(reportRes.data);
-      setDayTransactions(txnRes.data);
+      
+      // Filter out installment entries, keep loan & advance (deposit + used)
+      const filteredTxns = (txnRes.data || []).filter(
+        (txn) => !txn.type.includes("installment")
+      );
+      setDayTransactions(filteredTxns);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -43,10 +49,6 @@ const DailyReport = () => {
     loadDay(date);
   }, [date, loadDay]);
 
-  // The number the shop owner actually cares about: how much new credit
-  // went out today vs how much came back. Positive net = total outstanding
-  // loan grew today; negative net = it shrank (good — people are paying
-  // back more than they're borrowing).
   const loanGiven = report?.summary?.loan_given?.totalAmount || 0;
   const loanRecovered = report?.summary?.loan_repaid?.totalAmount || 0;
   const netChange = loanGiven - loanRecovered;
@@ -94,9 +96,6 @@ const DailyReport = () => {
               </div>
             </div>
 
-            {/* Net change flips color based on direction: red when today's
-                new credit outweighs what came back (outstanding loan grew),
-                green when more was recovered than given out. */}
             <div
               className={`rounded-2xl p-5 mb-6 shadow-tile text-white ${
                 netChange > 0 ? "bg-debt" : netChange < 0 ? "bg-credit" : "bg-ink-400"
